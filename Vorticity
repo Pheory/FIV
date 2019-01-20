@@ -1,0 +1,160 @@
+clear;
+clc;
+
+Initialize
+load('Imagedata_Ver04_20hz2015-07-03T150525908.mat')
+mmpx = 0.3622; % mm to px ratio
+UX = cell(10,1);
+UY = cell(10,1);
+VX = cell(10,1);
+VY = cell(10,1);
+ux = cell(10,1);
+uy = cell(10,1);
+vx = cell(10,1);
+vy = cell(10,1);
+dx = 30*mmpx/1000;
+dy = 30*mmpx/1000;
+Vort1 = cell(10,1);
+Vort2 = cell(10,1);
+[sizex,sizey] = size(imagedata{1,1});
+[X, Y] = meshgrid(0:s{2,2}*mmpx/1000:s{2,2}*(sizey - 1)*mmpx/1000,0:s{2,2}*mmpx/1000:s{2,2}*(sizex - 1)*mmpx/1000);
+
+Vorticity
+for i = T
+    [ux{i},uy{i}] = gradient(imagedata{i,1});
+    [vx{i},vy{i}] = gradient(imagedata{i,2});
+    Vort1{i} = (vx{i}-uy{i})/dy;
+end
+
+% Average Vorticities
+B = zeros(sizex,sizey);
+dumbdiv = zeros(1,T(end));
+for j = 1:sizex*sizey
+    for i = T
+       dumbdiv(i) = Vort1{i}(j); 
+    end
+    B(j) = nanmean(dumbdiv);
+end
+
+Vorticity 2
+colu = cell(10,18);
+rowv = cell(13,10);
+for i = T % du/dy
+    UY{i} = zeros(13,18);
+    for j = 1:sizey % Seperate U into column
+        colu{i,j} = imagedata{i,1}(:,j);
+    end
+    for j = 1:sizey % du/dy move across with each column
+        p = 1;
+        q = 2;
+        for k = 1:sizex-1 % du/dy go down each column
+            if q > sizex
+                break
+            end
+            u1 = colu{i,j}(p);
+            u2 = colu{i,j}(q);
+            while isnan(u1) == 1 % u1 is nan skip
+                p = p + 1;
+                q = p + 1;
+                if q > sizex
+                    break
+                end
+                u1 = colu{i,j}(p);
+                u2 = colu{i,j}(q);
+            end
+            while isnan(u2) == 1 % u2 is nan skip
+                q = q + 1;
+                if q > sizex
+                    break
+                end
+                u2 = colu{i,j}(q);
+            end
+            if q > sizex
+                break
+            end
+            UY{i}(p:q,j) = (u2 - u1)/dy; % Calculate DU/DY
+            p = q;
+            q = p + 1;
+        end
+    end
+    UY{i}(13,:) = NaN;
+    UY{i}(:,1) = NaN;
+    UY{i}(find(UY{i} == 0)) = NaN;
+end
+
+for i = T % dv/dx
+    VX{i} = zeros(13,18);
+    for j = 1:sizex % Seperate V into row
+        rowv{j,i} = imagedata{i,2}(j,:);
+    end
+    for j = 1:sizex % dv/dx move across with each row
+        p = 1;
+        q = 2;
+        for k = 1:sizey-1 % dv/dx go across each row
+            if q > sizey
+                break
+            end
+            u1 = rowv{j,i}(p);
+            u2 = rowv{j,i}(q);
+            while isnan(u1) == 1 % u1 is nan skip
+                p = p + 1;
+                q = p + 1;
+                if q > sizey
+                    break
+                end
+                u1 = rowv{j,i}(p);
+                u2 = rowv{j,i}(q);
+            end
+            while isnan(u2) == 1 % u2 is nan skip
+                q = q + 1;
+                if q > sizey
+                    break
+                end
+                u2 = rowv{j,i}(q);
+            end
+            if q > sizey
+                break
+            end
+            VX{i}(j,p:q) = (u2 - u1)/dx; % Calculate DV/DU
+            p = q;
+            q = p + 1;
+        end
+    end
+    VX{i}(:,18) = NaN;
+    VX{i}(:,1) = NaN;
+    VX{i}(find(VX{i} == 0)) = NaN;
+end
+
+vorser = zeros(13,18,length(T));
+for i = T
+    Vort2{i} = VX{i} - UY{i};
+    vorser(:,:,i) = Vort2{i};
+end
+
+Plot average velocity as contour
+hold off % Costream
+contourf(X,Y,B)
+hold on
+xlabel('U position [m]')
+ylabel('V position [m]')
+title('Vorticity [1/s]')
+colortitle = colorbar;
+title(colortitle,'Vorticity [1/s]');
+hold off
+
+% Make a movie
+set(gcf,'nextplot','replacechildren');
+for i = T
+    contourf(X,Y,Vort2{i});
+    axis off;
+    pcolor(X,Y,Vort2{i});
+    shading interp;
+    colortitle = colorbar;
+    title(colortitle,'Vorticity [1/s]');
+    F(i) = getframe(gcf);
+    lighting phong;
+end
+
+% movie(gcf,F)
+
+
